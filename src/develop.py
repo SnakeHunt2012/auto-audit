@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 
 from sys import stdout
+from json import dumps
 from codecs import open
 from numpy import array
 from argparse import ArgumentParser
 from random import shuffle
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import precision_recall_curve
+from sklearn.metrics import roc_auc_score, accuracy_score
 
 def load_data(path):
     
@@ -65,17 +66,17 @@ def main():
     X_train, y_train, X_validate, y_validate = load_data(data_file)
 
     rf = RandomForestClassifier(
-        n_estimators=10,
+        n_estimators=1000,
         criterion='gini',
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
+        max_depth=20,
+        min_samples_split=20,
+        min_samples_leaf=3,
         min_weight_fraction_leaf=0.0,
         max_features='auto',
         max_leaf_nodes=None,
         bootstrap=True,
         oob_score=False,
-        n_jobs=48,
+        n_jobs=50,
         random_state=None,
         verbose=0,
         warm_start=False,
@@ -85,19 +86,30 @@ def main():
     rf.fit(X_train, y_train)
 
     assert rf.classes_.tolist() == [0, 1]
-    proba_train = rf.predict_proba(X_train)[:, 0]
-    proba_validate = rf.predict_proba(X_validate)[:, 0]
 
-    precision_train, recall_train, threshold_train = precision_recall_curve(y_train, proba_train)
-    precision_validate, recall_validate, threshold_validate = precision_recall_curve(y_validate, proba_validate)
+    pred_train = rf.predict(X_train)
+    pred_validate = rf.predict(X_validate)
+    proba_train = rf.predict_proba(X_train)
+    proba_validate = rf.predict_proba(X_validate)
 
-    stdout.write("%s\n" % " ".join([str(val) for val in precision_train.tolist()]))
-    stdout.write("%s\n" % " ".join([str(val) for val in recall_train.tolist()]))
-    stdout.write("%s\n" % " ".join([str(val) for val in threshold_train.tolist()]))
-    stdout.write("%s\n" % " ".join([str(val) for val in precision_validate.tolist()]))
-    stdout.write("%s\n" % " ".join([str(val) for val in recall_validate.tolist()]))
-    stdout.write("%s\n" % " ".join([str(val) for val in threshold_validate.tolist()]))
+    acc_train = accuracy_score(y_train, pred_train)
+    acc_validate = accuracy_score(y_validate, pred_validate)
+    auc_train = roc_auc_score(1 - y_train, proba_train[:, 0])
+    auc_validate = roc_auc_score(1 - y_validate, proba_validate[:, 0])
+
+    score_dict = {
+        "y_train": y_train.tolist(),
+        "proba_train": proba_train[:, 0].tolist(),
+        "y_validate": y_validate.tolist(),
+        "proba_validate": proba_validate[:, 0].tolist(),
+        "acc_train": acc_train,
+        "acc_validate": acc_validate,
+        "auc_train": auc_train,
+        "auc_validate": auc_validate
+    }
+    stdout.write(dumps(score_dict, indent = 4))
     
 if __name__ == "__main__":
     
     main()
+
