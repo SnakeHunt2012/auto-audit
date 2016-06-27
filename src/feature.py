@@ -1,27 +1,29 @@
 #!/usr/bin/env python
 # -*- coding: utf-8
 
-from sys import stdin, stdout
+from re import compile
+from json import dumps
 from codecs import open
 from numpy import array, zeros
-from re import compile
-from argparse import ArgumentParser
 from jieba import cut
+from argparse import ArgumentParser
 from progressbar import ProgressBar
 
 def main():
 
     parser = ArgumentParser()
-    parser.add_argument("correlate_file", help = "url_file")
+    parser.add_argument("correlate_file", help = "correlate_file")
     parser.add_argument("url_file", help = "url_file")
     parser.add_argument("content_file", help = "content_file")
     parser.add_argument("data_file", help = "data_file")
+    parser.add_argument("template_file", help = "template_file")
     args = parser.parse_args()
     
     correlate_file = args.correlate_file
     url_file = args.url_file
     content_file = args.content_file
     data_file = args.data_file
+    template_file = args.template_file
 
     url_re = compile("(?<=<url:)[^>]*(?=>)")
     content_re = compile("(?<=<content:)[^>]*(?=>)")
@@ -42,6 +44,10 @@ def main():
 
     correlate_list = list(correlate_set)
     correlate_dict = dict((correlate_list[i], i) for i in range(len(correlate_list)))
+    index_dict = dict((i, correlate_list[i]) for i in range(len(correlate_list)))
+
+    with open(template_file, 'w') as fd:
+        fd.write(dumps(index_dict, indent = 4, ensure_ascii = False))
 
     with open(url_file, 'r') as fd:
         for line in fd:
@@ -73,7 +79,7 @@ def main():
     
     with open(data_file, 'w') as fd:
         progress = ProgressBar(maxval = len(url_dict)).start()
-        counter = 1
+        counter = 0
         for url in url_dict:
             if "content" in url_dict[url]:
                 #print url_dict[url]["tag"], url_dict[url]["content"]
