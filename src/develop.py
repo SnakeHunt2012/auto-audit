@@ -105,7 +105,8 @@ def main():
         "acc_train": acc_train,
         "acc_validate": acc_validate,
         "auc_train": auc_train,
-        "auc_validate": auc_validate
+        "auc_validate": auc_validate,
+        "feature_importance": rf.feature_importances_.tolist()
     }
     stdout.write(dumps(score_dict, indent = 4))
     
