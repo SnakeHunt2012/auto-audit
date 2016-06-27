@@ -20,15 +20,20 @@ def load_data(path):
     bad_count = 0
     with open(path, 'r') as fd:
         for line in fd:
-            splited_line = line.strip().split()
-            assert len(splited_line) > 0
+            splited_line = line.strip().split("\t")
+            if len(splited_line) != 2:
+                continue
+            url, feature_str = splited_line
+            feature_list = feature_str.strip().split()
+            assert len(feature_list) > 0
             if dim == 0:
-                dim = len(splited_line)
-            assert len(splited_line) == dim
-            record = [int(val) for val in splited_line]
-            if record[-1] == good_label:
+                dim = len(feature_list)
+            assert len(feature_list) == dim
+            record = [float(val) for val in feature_list]
+            record[-1] = 0 if record[-1] < 0.5 else 1
+            if int(record[-1]) == good_label:
                 good_count +=1
-            if record[-1] == bad_label:
+            if int(record[-1]) == bad_label:
                 bad_count += 1
             record_list.append(record)
     assert (good_count + bad_count) == len(record_list)
@@ -49,9 +54,15 @@ def load_data(path):
     record_list = [record_list[index] for index in index_list]
 
     split = int(0.8 * len(record_list))
-    record_array = array(record_list)
-    X_train, y_train = (record_array[:split, :-1], record_array[:split, -1])
-    X_validate, y_validate = (record_array[split:, :-1], record_array[split:, -1])
+
+    X_array = array([record[:-1] for record in record_list], dtype = "float")
+    y_array = array([record[-1] for record in record_list], dtype = "int")
+    X_train, X_validate = (X_array[:split], X_array[split:])
+    y_train, y_validate = (y_array[:split], y_array[split:])
+
+    #record_array = array(record_list)
+    #X_train, y_train = (record_array[:split, :-1], record_array[:split, -1])
+    #X_validate, y_validate = (record_array[split:, :-1], record_array[split:, -1])
 
     return X_train, y_train, X_validate, y_validate
 
@@ -66,11 +77,11 @@ def main():
     X_train, y_train, X_validate, y_validate = load_data(data_file)
 
     rf = RandomForestClassifier(
-        n_estimators=1000,
+        n_estimators=10000,
         criterion='gini',
         max_depth=20,
-        min_samples_split=20,
-        min_samples_leaf=3,
+        min_samples_split=10,
+        min_samples_leaf=10,
         min_weight_fraction_leaf=0.0,
         max_features='auto',
         max_leaf_nodes=None,
