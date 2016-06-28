@@ -94,16 +94,21 @@ def main():
         counter = 0
         for url in url_dict:
             if "image_list" in url_dict[url] and "sentence_list" in url_dict[url]:
+                feature = [0] * len(correlate_set)
+                
                 image_list = url_dict[url]["image_list"]
                 sentence_list = url_dict[url]["sentence_list"]
                 
                 # sentence_count
                 sentence_count = len(sentence_list)
 
-                # word_count & word_mean & word_var
+                # word_count & word_mean & word_var and correlate_feature
                 length_list = []
                 for sentence in sentence_list:
                     seg_list = cut(sentence)
+                    for seg in seg_list:
+                        if seg.encode("utf-8") in correlate_set:
+                            feature[correlate_dict[seg.encode("utf-8")]] += 1
                     length_list.append(sum([1 for seg in seg_list]))
                 word_count = sum(length_list)
                 word_mean = mean(length_list)
@@ -111,8 +116,9 @@ def main():
 
                 # image_count
                 image_count = len(image_list)
+
                 
-                feature = [sentence_count, word_count, word_mean, word_var, image_count]
+                feature.extend([sentence_count, word_count, word_mean, word_var, image_count])
                 data = feature + [tag_dict[url_dict[url]["tag"]]]
                 fd.write("%s\t%s\n" % (url, " ".join([str(val) for val in data])))
             counter += 1
