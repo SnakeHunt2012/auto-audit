@@ -49,22 +49,25 @@ def load_data(path):
     assert (len(good_index_list) > len(bad_index_list))
 
     shuffle(good_index_list)
+    shuffle(bad_index_list)
     index_list = good_index_list[:len(bad_index_list)] + bad_index_list
     shuffle(index_list)
-    record_list = [record_list[index] for index in index_list]
+    selected_record_list = [record_list[index] for index in index_list]
 
-    split = int(0.8 * len(record_list))
+    split = int(0.8 * len(selected_record_list))
+    weight_dict = {good_label: 1, bad_label: float(good_count - bad_count * 0.2) / float(bad_count * 0.8)} 
 
-    X_array = array([record[:-1] for record in record_list], dtype = "float")
-    y_array = array([record[-1] for record in record_list], dtype = "int")
-    X_train, X_validate = (X_array[:split], X_array[split:])
-    y_train, y_validate = (y_array[:split], y_array[split:])
+    X_list = [record[:-1] for record in selected_record_list]
+    y_list = [record[-1] for record in selected_record_list]
+    X_list_train, X_list_validate = (X_list[:split], X_list[split:])
+    y_list_train, y_list_validate = (y_list[:split], y_list[split:])
+    X_list_train += [record[:-1] for record in [record_list[index] for index in good_index_list[len(bad_index_list):]]]
+    y_list_train += [record[-1] for record in [record_list[index] for index in good_index_list[len(bad_index_list):]]]
 
-    #record_array = array(record_list)
-    #X_train, y_train = (record_array[:split, :-1], record_array[:split, -1])
-    #X_validate, y_validate = (record_array[split:, :-1], record_array[split:, -1])
+    X_train, X_validate = (array(X_list_train, dtype="float"), array(X_list_validate, dtype="float"))
+    y_train, y_validate = (array(y_list_train, dtype="int"), array(y_list_validate, dtype="int"))
 
-    return X_train, y_train, X_validate, y_validate
+    return X_train, y_train, X_validate, y_validate, weight_dict
 
 def main():
 
@@ -74,14 +77,14 @@ def main():
     
     data_file = args.data_file
 
-    X_train, y_train, X_validate, y_validate = load_data(data_file)
+    X_train, y_train, X_validate, y_validate, weight_dict = load_data(data_file)
 
     rf = RandomForestClassifier(
-        n_estimators=10000,
+        n_estimators=1000,
         criterion='gini',
         max_depth=20,
-        min_samples_split=10,
-        min_samples_leaf=10,
+        min_samples_split=20,
+        min_samples_leaf=3,
         min_weight_fraction_leaf=0.0,
         max_features='auto',
         max_leaf_nodes=None,
@@ -91,7 +94,7 @@ def main():
         random_state=None,
         verbose=0,
         warm_start=False,
-        class_weight=None
+        class_weight=weight_dict
     )
 
     rf.fit(X_train, y_train)
