@@ -14,12 +14,14 @@ def main():
     parser = ArgumentParser()
     parser.add_argument("url_file", help = "url_file")
     parser.add_argument("content_file", help = "content_file")
+    parser.add_argument("df_file", help = "df_file")
     parser.add_argument("data_file", help = "data_file")
     parser.add_argument("template_file", help = "template_file")
     args = parser.parse_args()
     
     url_file = args.url_file
     content_file = args.content_file
+    df_file = args.df_file
     data_file = args.data_file
     template_file = args.template_file
 
@@ -94,7 +96,7 @@ def main():
 
     # dump df dict
     print "dumping template (index -> word) ..."
-    with open("./df.json", 'w') as fd:
+    with open(df_file, 'w') as fd:
         fd.write(dumps(df_dict, indent=4, ensure_ascii=False))
     print "dumping template (index -> word) done"
 
@@ -104,7 +106,7 @@ def main():
     progress = ProgressBar(maxval = len(df_dict)).start()
     counter = 0
     for word in df_dict:
-        if df_dict[word] > 10:
+        if df_dict[word] > 100:
             idf_dict[word] = log(float(len(doc_list)) / df_dict[word])               # word -> idf
         counter += 1
         progress.update(counter)
