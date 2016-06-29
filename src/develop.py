@@ -73,11 +73,15 @@ def main():
 
     parser = ArgumentParser()
     parser.add_argument("data_file", help = "data_file")
+    parser.add_argument("score_file", help = "score_file")
     args = parser.parse_args()
     
     data_file = args.data_file
+    score_file = args.score_file
 
+    print "loading data ..."
     X_train, y_train, X_validate, y_validate, weight_dict = load_data(data_file)
+    print "loading data done."
 
     rf = RandomForestClassifier(
         n_estimators=1000,
@@ -97,7 +101,9 @@ def main():
         class_weight=weight_dict
     )
 
+    print "training ..."
     rf.fit(X_train, y_train)
+    print "training done"
 
     assert rf.classes_.tolist() == [0, 1]
 
@@ -122,7 +128,10 @@ def main():
         "auc_validate": auc_validate,
         "feature_importance": rf.feature_importances_.tolist()
     }
-    stdout.write(dumps(score_dict, indent = 4))
+    print "dumping socre ..."
+    with open(score_file, 'w') as fd:
+        fd.write(dumps(score_dict, indent = 4))
+    print "dumping socre done"
     
 if __name__ == "__main__":
     
