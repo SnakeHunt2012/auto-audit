@@ -4,6 +4,7 @@
 from json import dumps
 from codecs import open
 from numpy import array
+from pickle import dump, load
 from argparse import ArgumentParser
 from random import shuffle
 from scipy.sparse import coo_matrix
@@ -95,22 +96,36 @@ def main():
     parser = ArgumentParser()
     parser.add_argument("data_file", help = "data_file")
     parser.add_argument("score_file", help = "score_file")
+    parser.add_argument("--load-matrix", help = "matrix file to load")
+    parser.add_argument("--dump-matrix", help = "matrix file to dump")
     args = parser.parse_args()
     
     data_file = args.data_file
     score_file = args.score_file
+    matrix_load_path = args.load_matrix
+    matrix_dump_path = args.dump_matrix
 
     print "loading data ..."
-    X_train, y_train, X_validate, y_validate = load_data(data_file)
+    if matrix_load_path:
+        with open(matrix_load_path, "rb") as fd:
+            X_train, y_train, X_validate, y_validate = load(fd)
+    else:
+        X_train, y_train, X_validate, y_validate = load_data(data_file)
     print X_train.shape, y_train.shape, X_validate.shape, y_validate.shape
     print "loading data done."
+
+    if matrix_dump_path:
+        print "dumping data ..."
+        with open(matrix_dump_path, "wb") as fd:
+            dump((X_train, y_train, X_validate, y_validate), fd)
+        print "dumping data done"
 
     rf = RandomForestClassifier(
         n_estimators=1000,
         criterion='gini',
-        max_depth=20,
-        min_samples_split=20,
-        min_samples_leaf=5,
+        max_depth=None,
+        min_samples_split=2,
+        min_samples_leaf=20,
         min_weight_fraction_leaf=0.0,
         max_features='auto',
         max_leaf_nodes=None,
