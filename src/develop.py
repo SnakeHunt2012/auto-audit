@@ -1,74 +1,95 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from sys import stdout
 from json import dumps
 from codecs import open
 from numpy import array
 from argparse import ArgumentParser
 from random import shuffle
+from scipy.sparse import coo_matrix
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, accuracy_score
+
+def sparse_matrix(feature_list, label_list, dim, index_list):
+
+    row_list = []
+    column_list = []
+    value_list = []
+
+    for row_index in xrange(len(index_list)):
+        for item in feature_list[index_list[row_index]]:
+            assert len(item) == 2
+            row_list.append(row_index)
+            column_list.append(item[0])
+            value_list.append(item[1])
+    assert len(row_list) == len(column_list) == len(value_list)
+
+    X_matrix = coo_matrix((value_list, (row_list, column_list)), shape=(len(index_list), dim))
+    y_array = array([label_list[index] for index in index_list], dtype="int")
+
+    return X_matrix, y_array
 
 def load_data(path):
     
     dim = 0
-    record_list = []
     good_label = 0
     bad_label = 1
+    
+    url_list = []
+    feature_list = [] # sparse storage: ith row -> [(j, data), (j, data), ... ]
+    label_list = []
+    
     good_count = 0
     bad_count = 0
+    
     with open(path, 'r') as fd:
         for line in fd:
             splited_line = line.strip().split("\t")
             if len(splited_line) != 2:
                 continue
             url, feature_str = splited_line
-            feature_list = feature_str.strip().split()
-            assert len(feature_list) > 0
+            value_list = feature_str.strip().split()
+            assert len(value_list) > 0
+            label = int(value_list.pop(-1))
+            assert len(value_list) > 0
+            assert label in set([good_label, bad_label])
             if dim == 0:
-                dim = len(feature_list)
-            assert len(feature_list) == dim
-            record = [float(val) for val in feature_list]
-            record[-1] = 0 if record[-1] < 0.5 else 1
-            if int(record[-1]) == good_label:
+                dim = len(value_list)
+            assert len(value_list) == dim
+            feature = [(index, float(value_list[index])) for index in xrange(dim) if value_list[index] != '0']
+            if label == good_label:
                 good_count +=1
-            if int(record[-1]) == bad_label:
+            if label == bad_label:
                 bad_count += 1
-            record_list.append(record)
-    assert (good_count + bad_count) == len(record_list)
+            url_list.append(url)
+            feature_list.append(feature)
+            label_list.append(label)
+    print len(url_list) , len(feature_list) , len(label_list) , (good_count + bad_count)
+    assert len(url_list) == len(feature_list) == len(label_list) == (good_count + bad_count)
     
-    good_index_list = []
-    bad_index_list = []
-    for index in range(len(record_list)):
-        if record_list[index][-1] == good_label:
-            good_index_list.append(index)
-        if record_list[index][-1] == bad_label:
-            bad_index_list.append(index)
-    assert (len(good_index_list) + len(bad_index_list)) == len(record_list)
-    assert (len(good_index_list) > len(bad_index_list))
+    good_index_list = [index for index in xrange(len(label_list)) if label_list[index] == good_label]
+    bad_index_list = [index for index in xrange(len(label_list)) if label_list[index] == bad_label]
+    assert len(good_index_list) == good_count
+    assert len(bad_index_list) == bad_count
 
     shuffle(good_index_list)
     shuffle(bad_index_list)
-    index_list = good_index_list[:len(bad_index_list)] + bad_index_list
+
+    assert good_count > bad_count
+    good_index_list = good_index_list[:bad_count]
+
+    index_list = good_index_list + bad_index_list
     shuffle(index_list)
-    selected_record_list = [record_list[index] for index in index_list]
 
-    split = int(0.8 * len(selected_record_list))
-    weight_dict = {good_label: 1, bad_label: float(good_count - bad_count * 0.2) / float(bad_count * 0.8)} 
+    threshold = int(0.8 * len(index_list))
+    train_index_list = index_list[:threshold]
+    validate_index_list = index_list[threshold:]
 
-    X_list = [record[:-1] for record in selected_record_list]
-    y_list = [record[-1] for record in selected_record_list]
-    X_list_train, X_list_validate = (X_list[:split], X_list[split:])
-    y_list_train, y_list_validate = (y_list[:split], y_list[split:])
-    X_list_train += [record[:-1] for record in [record_list[index] for index in good_index_list[len(bad_index_list):]]]
-    y_list_train += [record[-1] for record in [record_list[index] for index in good_index_list[len(bad_index_list):]]]
+    X_train, y_train = sparse_matrix(feature_list, label_list, dim, train_index_list)
+    X_validate, y_validate = sparse_matrix(feature_list, label_list, dim, validate_index_list)
 
-    X_train, X_validate = (array(X_list_train, dtype="float"), array(X_list_validate, dtype="float"))
-    y_train, y_validate = (array(y_list_train, dtype="int"), array(y_list_validate, dtype="int"))
-
-    return X_train, y_train, X_validate, y_validate, weight_dict
-
+    return X_train, y_train, X_validate, y_validate
+    
 def main():
 
     parser = ArgumentParser()
@@ -80,7 +101,8 @@ def main():
     score_file = args.score_file
 
     print "loading data ..."
-    X_train, y_train, X_validate, y_validate, weight_dict = load_data(data_file)
+    X_train, y_train, X_validate, y_validate = load_data(data_file)
+    print X_train.shape, y_train.shape, X_validate.shape, y_validate.shape
     print "loading data done."
 
     rf = RandomForestClassifier(
@@ -88,7 +110,7 @@ def main():
         criterion='gini',
         max_depth=20,
         min_samples_split=20,
-        min_samples_leaf=3,
+        min_samples_leaf=5,
         min_weight_fraction_leaf=0.0,
         max_features='auto',
         max_leaf_nodes=None,
@@ -98,7 +120,7 @@ def main():
         random_state=None,
         verbose=0,
         warm_start=False,
-        class_weight=weight_dict
+        class_weight=None
     )
 
     print "training ..."
