@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from json import dumps
+from json import dumps, loads
 from codecs import open
 from numpy import array
 from pickle import dump, load
+from urlparse import urlparse
 from argparse import ArgumentParser
 from random import shuffle
 from scipy.sparse import coo_matrix
@@ -30,7 +31,7 @@ def sparse_matrix(feature_list, label_list, dim, index_list):
 
     return X_matrix, y_array
 
-def load_data(path):
+def load_data(path, netloc_dict):
     
     dim = 0
     good_label = 0
@@ -49,11 +50,17 @@ def load_data(path):
             if len(splited_line) != 2:
                 continue
             url, feature_str = splited_line
+            netloc = urlparse(url).netloc
             value_list = feature_str.strip().split()
             assert len(value_list) > 0
             label = int(value_list.pop(-1))
             assert len(value_list) > 0
             assert label in set([good_label, bad_label])
+
+            if netloc in netloc_dict:
+                value_list += [float(val) for val in netloc_dict[netloc]]
+            else:
+                value_list += [float(val) for val in netloc_dict["unknown"]]
             if dim == 0:
                 dim = len(value_list)
             assert len(value_list) == dim
@@ -94,23 +101,30 @@ def load_data(path):
 def main():
 
     parser = ArgumentParser()
-    parser.add_argument("data_file", help = "data_file")
-    parser.add_argument("score_file", help = "score_file")
-    parser.add_argument("--load-matrix", help = "matrix file to load")
-    parser.add_argument("--dump-matrix", help = "matrix file to dump")
+    parser.add_argument("data_file", help = "data_file (input)")
+    parser.add_argument("netloc_file", help = "netloc_file (input)")
+    parser.add_argument("score_file", help = "score_file (output)")
+    parser.add_argument("--load-matrix", help = "matrix file to load (input)")
+    parser.add_argument("--dump-matrix", help = "matrix file to dump (output)")
     args = parser.parse_args()
     
     data_file = args.data_file
+    netloc_file = args.netloc_file
     score_file = args.score_file
     matrix_load_path = args.load_matrix
     matrix_dump_path = args.dump_matrix
+
+    print "loading url feature dict ..."
+    with open(netloc_file, 'r') as fd:
+        netloc_dict = loads(fd.read())
+    print "loading url feature dict done"
 
     print "loading data ..."
     if matrix_load_path:
         with open(matrix_load_path, "rb") as fd:
             X_train, y_train, X_validate, y_validate = load(fd)
     else:
-        X_train, y_train, X_validate, y_validate = load_data(data_file)
+        X_train, y_train, X_validate, y_validate = load_data(data_file, netloc_dict)
     print X_train.shape, y_train.shape, X_validate.shape, y_validate.shape
     print "loading data done."
 
