@@ -6,24 +6,29 @@ from json import dumps
 from codecs import open
 from numpy import log
 from jieba import cut
+from urlparse import urlparse
 from argparse import ArgumentParser
 from progressbar import ProgressBar
 
 def main():
 
     parser = ArgumentParser()
-    parser.add_argument("url_file", help = "url_file")
-    parser.add_argument("content_file", help = "content_file")
-    parser.add_argument("df_file", help = "df_file")
-    parser.add_argument("data_file", help = "data_file")
-    parser.add_argument("template_file", help = "template_file")
+    parser.add_argument("url_file", help = "url_file (input)")
+    parser.add_argument("content_file", help = "content_file (input)")
+    parser.add_argument("data_file", help = "data_file (output)")
+    parser.add_argument("--load-idf", help = "idf file to load (input)")
+    parser.add_argument("--dump-idf", help = "idf file to dump (output)")
+    parser.add_argument("--load-template", help = "idf file to load (input)")
+    parser.add_argument("--dump-template", help = "idf file to dump (output)")
     args = parser.parse_args()
     
     url_file = args.url_file
     content_file = args.content_file
-    df_file = args.df_file
     data_file = args.data_file
-    template_file = args.template_file
+    load_idf_file = args.load_idf
+    dump_idf_file = args.dump_idf
+    load_template_file = args.load_template
+    dump_template_file = args.dump_template
 
     url_re = compile("(?<=<url:)[^>]*(?=>)")
     content_re = compile("(?<=<content:)[^>]*(?=>)")
@@ -31,6 +36,79 @@ def main():
     br_sub = compile("\[br\]")
 
     tag_dict = {"0": 0, "1":1, "2":1, "3":0, "4":1, "5":1}
+    good_netloc_dict = {
+        "finance.chinanews.com": 198, 
+        "finance.sina.cn": 2370, 
+        "finance.ifeng.com": 635, 
+        "finance.sina.com.cn": 1379, 
+        "finance.china.com.cn": 102, 
+        "finance.eastmoney.com": 729, 
+        "news.hexun.com": 798, 
+        "sports.ifeng.com": 898, 
+        "sports.eastday.com": 172, 
+        "sports.qq.com": 868, 
+        "sports.163.com": 2119, 
+        "we.sportscn.com": 208, 
+        "slide.sports.sina.com.cn": 320, 
+        "sports.sina.com.cn": 3109, 
+        "pic.sports.sohu.com": 264, 
+        "sports.sohu.com": 788, 
+        "sports.sina.cn": 1276,
+        "www.dongqiudi.com": 1331,
+        "tech.hexun.com": 935, 
+        "tech.huanqiu.com": 293, 
+        "tech.163.com": 356, 
+        "tech.ifeng.com": 460, 
+        "m.techweb.com.cn": 533, 
+        "tech.sina.cn": 165, 
+        "tech.gmw.cn": 227, 
+        "www.techweb.com.cn": 201, 
+        "tech.sina.com.cn": 545, 
+        "tech.china.com": 611, 
+        "tech.qq.com": 160,
+        "www.ifanr.com": 165,
+        "www.leiphone.com": 122,
+        "www.cnsoftnews.com": 315, 
+        "news.mydrivers.com": 785, 
+        "news.qudong.com": 148, 
+        "www.cnsoftnews.com": 315, 
+    }
+    bad_netloc_dict = {
+        "news.cnr.cn": 232, 
+        "news.163.com": 6810, 
+        "www.chinanews.com": 549, 
+        "news.sina.cn": 775, 
+        "news.youth.cn": 483, 
+        "news.cyol.com": 227, 
+        "news.vdfly.com": 113, 
+        "news.focus.cn": 128, 
+        "news.dahe.cn": 415, 
+        "news.ubetween.com": 116, 
+        "news.ifeng.com": 3588, 
+        "news.szzaix.com": 145, 
+        "news.k618.cn": 452, 
+        "news.southcn.com": 299, 
+        "news.gmw.cn": 929, 
+        "cnews.chinadaily.com.cn": 353, 
+        "news.china.com.cn": 101, 
+        "news.china.com": 248, 
+        "news.xinhuanet.com": 1249, 
+        "news.qq.com": 201, 
+        "news.bitauto.com": 364, 
+        "news.7k7k.com": 104, 
+        "news.sina.com.cn": 2367, 
+        "m.news.cn": 184, 
+        "news.wmxa.cn": 108, 
+        "xhpfm.news.zhongguowangshi.com:8091": 184, 
+        "news.e23.cn": 403, 
+        "mil.news.sina.com.cn": 248, 
+        "news.eastday.com": 181, 
+        "pic.news.sohu.com": 117, 
+        "news.sohu.com": 871, 
+    }
+
+    good_netloc_set = set(good_netloc_dict)
+    bad_netloc_set = set(bad_netloc_dict)
 
     # url_dict
     print "aggregating url dict (url -> label) ..."
@@ -94,12 +172,6 @@ def main():
     progress.finish()
     print "aggregating df dict (word -> df) done"
 
-    # dump df dict
-    print "dumping template (index -> word) ..."
-    with open(df_file, 'w') as fd:
-        fd.write(dumps(df_dict, indent=4, ensure_ascii=False))
-    print "dumping template (index -> word) done"
-
     print "aggregating df dict (word -> idf) ..."
     idf_dict = {}
     
@@ -116,11 +188,19 @@ def main():
     index_dict = dict((index, word_list[index]) for index in xrange(len(word_list))) # index -> word
     print "aggregating idf dict (word -> idf) done"
 
-    # dump index->word dict
-    print "dumping template (index -> word) ..."
-    with open(template_file, 'w') as fd:
-        fd.write(dumps(index_dict, indent=4, ensure_ascii=False))
-    print "dumping template (index -> word) done"
+    if dump_idf_file:
+        # dump idf dict
+        print "dumping idf (word -> idf) ..."
+        with open(dump_idf_file, 'w') as fd:
+            fd.write(dumps(idf_dict, indent=4, ensure_ascii=False))
+        print "dumping idf (word -> idf) done"
+
+    if dump_template_file:
+        # dump index->word dict
+        print "dumping template (index -> word) ..."
+        with open(dump_template_file, 'w') as fd:
+            fd.write(dumps(index_dict, indent=4, ensure_ascii=False))
+        print "dumping template (index -> word) done"
 
     # tfidf
     print "dumping feature ..."
@@ -128,6 +208,14 @@ def main():
         progress = ProgressBar(maxval = len(doc_list)).start()
         counter = 0
         for url, seg_list in doc_list:
+            tag = None
+            if urlparse(url).netloc in good_netloc_set:
+                tag = 0
+            elif urlparse(url).netloc in bad_netloc_set:
+                tag = 1
+            if tag is None:
+                continue
+                
             tf_dict = {} 
             for word in seg_list:
                 if word not in tf_dict:
@@ -140,24 +228,13 @@ def main():
             for word in tf_dict:
                 if (word in word_dict) and (word in idf_dict):
                     feature[word_dict[word]] = tf_dict[word] * idf_dict[word]
-            fd.write("%s\t%s %d\n" % (url, " ".join([str(value) for value in feature]), url_dict[url]))
+
+            fd.write("%s\t%s %d\n" % (url, " ".join([str(value) for value in feature]), tag))
             counter += 1
             progress.update(counter)
         progress.finish()
     print "dumping feature done"
-        
-    # tf-idf transform
-    #with open(data_file, 'w') as fd:
-    #    progress = ProgressBar(maxval = len(doc_array.shape[0])).start()
-    #    counter = 0
-    #    for index in xrange(len(doc_array)):
-    #        url = url_list[index]
-    #        label = tag_dict[url_dict[url]]
-    #        vector = " ".join([doc_array[index][i] for i in xrange(len(word_list))])
-    #        fd.write("%s\t%s\t%d\n" % (url, vector, label))
-    #        progress.update(counter)
-    #    progress.finish()
-
+    
 if __name__ == "__main__":
 
     main()
