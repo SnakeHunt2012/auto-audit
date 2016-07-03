@@ -12,7 +12,7 @@ from scipy.sparse import coo_matrix
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, accuracy_score
 
-def sparse_matrix(feature_list, label_list, dim, index_list):
+def sparse_matrix(url_list, feature_list, label_list, dim, index_list):
 
     row_list = []
     column_list = []
@@ -29,7 +29,7 @@ def sparse_matrix(feature_list, label_list, dim, index_list):
     X_matrix = coo_matrix((value_list, (row_list, column_list)), shape=(len(index_list), dim))
     y_array = array([label_list[index] for index in index_list], dtype="int")
 
-    return X_matrix, y_array
+    return [url_list[index] for index in index_list], X_matrix, y_array
 
 #def load_data(path, netloc_dict):
 def load_data(path):
@@ -65,7 +65,7 @@ def load_data(path):
             if dim == 0:
                 dim = len(value_list)
             assert len(value_list) == dim
-            feature = [(index, float(value_list[index])) for index in xrange(dim) if value_list[index] != '0']
+            feature = [(index, float(value_list[index])) for index in xrange(dim) if (value_list[index] != '0.0' and value_list[index] != '0')]
             if label == good_label:
                 good_count +=1
             if label == bad_label:
@@ -94,10 +94,10 @@ def load_data(path):
     train_index_list = index_list[:threshold]
     validate_index_list = index_list[threshold:]
 
-    X_train, y_train = sparse_matrix(feature_list, label_list, dim, train_index_list)
-    X_validate, y_validate = sparse_matrix(feature_list, label_list, dim, validate_index_list)
+    url_train, X_train, y_train = sparse_matrix(url_list, feature_list, label_list, dim, train_index_list)
+    url_validate, X_validate, y_validate = sparse_matrix(url_list, feature_list, label_list, dim, validate_index_list)
 
-    return X_train, y_train, X_validate, y_validate
+    return url_train, X_train, y_train, url_validate, X_validate, y_validate
     
 def main():
 
@@ -107,6 +107,7 @@ def main():
     parser.add_argument("score_file", help = "score_file (output)")
     parser.add_argument("--load-matrix", help = "matrix file to load (input)")
     parser.add_argument("--dump-matrix", help = "matrix file to dump (output)")
+    parser.add_argument("--dump-model", help = "model file to dump (output)")
     args = parser.parse_args()
     
     data_file = args.data_file
@@ -114,6 +115,7 @@ def main():
     score_file = args.score_file
     matrix_load_path = args.load_matrix
     matrix_dump_path = args.dump_matrix
+    model_dump_path = args.dump_model
 
     #print "loading url feature dict ..."
     #with open(netloc_file, 'r') as fd:
@@ -123,17 +125,17 @@ def main():
     print "loading data ..."
     if matrix_load_path:
         with open(matrix_load_path, "rb") as fd:
-            X_train, y_train, X_validate, y_validate = load(fd)
+            url_train, X_train, y_train, url_validate, X_validate, y_validate = load(fd)
     else:
         #X_train, y_train, X_validate, y_validate = load_data(data_file, netloc_dict)
-        X_train, y_train, X_validate, y_validate = load_data(data_file)
+        url_train, X_train, y_train, url_validate, X_validate, y_validate = load_data(data_file)
     print X_train.shape, y_train.shape, X_validate.shape, y_validate.shape
     print "loading data done."
 
     if matrix_dump_path:
         print "dumping data ..."
         with open(matrix_dump_path, "wb") as fd:
-            dump((X_train, y_train, X_validate, y_validate), fd)
+            dump((url_train, X_train, y_train, url_validate, X_validate, y_validate), fd)
         print "dumping data done"
 
     rf = RandomForestClassifier(
@@ -171,8 +173,10 @@ def main():
     auc_validate = roc_auc_score(1 - y_validate, proba_validate[:, 0])
 
     score_dict = {
+        "url_train": url_train,
         "y_train": y_train.tolist(),
         "proba_train": proba_train[:, 0].tolist(),
+        "url_validate": url_validate,
         "y_validate": y_validate.tolist(),
         "proba_validate": proba_validate[:, 0].tolist(),
         "acc_train": acc_train,
@@ -185,6 +189,11 @@ def main():
     with open(score_file, 'w') as fd:
         fd.write(dumps(score_dict, indent = 4))
     print "dumping socre done"
+
+    print "dumping model ..."
+    with open(model_dump_path, "wb") as fd:
+        dump(rf, fd)
+    print "dumping model done"
     
 if __name__ == "__main__":
     
