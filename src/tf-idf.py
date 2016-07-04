@@ -2,9 +2,10 @@
 # -*- coding: utf-8
 
 from re import compile
-from json import dumps
+from json import loads, dumps
 from codecs import open
 from numpy import log
+from numpy.linalg import norm
 from jieba import cut
 from urlparse import urlparse
 from argparse import ArgumentParser
@@ -83,39 +84,50 @@ def main():
         progress.finish()
     print "aggregating doc list [(url, seg_list)] done"
 
-    # df_dict
-    print "aggregating df dict (word -> df) ..."
-    df_dict = {}
+    if load_idf_file and load_template_file:
+        with open(load_idf_file, 'r') as fd:
+            idf_dict = loads(fd.read())
+        idf_dict = dict((key.encode("utf-8"), idf_dict[key]) for key in idf_dict)
+        with open(load_template_file, 'r') as fd:
+            index_dict = loads(fd.read())
+        index_dict = dict((int(key), index_dict[key].encode("utf-8")) for key in index_dict)
+        word_dict = dict((index_dict[key], key) for key in index_dict)
+        word_list = [index_dict[index] for index in xrange(len(word_dict))]
+    else:
+        # df_dict
+        print "aggregating df dict (word -> df) ..."
+        df_dict = {}
+        
+        progress = ProgressBar(maxval = len(doc_list)).start()
+        counter = 0
+        for url, seg_list in doc_list:
+            word_set = set(seg_list)
+            for word in word_set:
+                if word not in df_dict:
+                    df_dict[word] = 0
+                df_dict[word] += 1                                          # word -> doc_count
+            counter += 1
+            progress.update(counter)
+        progress.finish()
+        print "aggregating df dict (word -> df) done"
     
-    progress = ProgressBar(maxval = len(doc_list)).start()
-    counter = 0
-    for url, seg_list in doc_list:
-        word_set = set(seg_list)
-        for word in word_set:
-            if word not in df_dict:
-                df_dict[word] = 0
-            df_dict[word] += 1                                          # word -> doc_count
-        counter += 1
-        progress.update(counter)
-    progress.finish()
-    print "aggregating df dict (word -> df) done"
-
-    print "aggregating df dict (word -> idf) ..."
-    idf_dict = {}
-    
-    progress = ProgressBar(maxval = len(df_dict)).start()
-    counter = 0
-    for word in df_dict:
-        if df_dict[word] > 10:
-            idf_dict[word] = log(float(len(doc_list)) / df_dict[word])               # word -> idf
-        counter += 1
-        progress.update(counter)
-    progress.finish()
-    word_list = list(idf_dict)
-    word_dict = dict((word_list[index], index) for index in xrange(len(word_list)))  # word -> index
-    index_dict = dict((index, word_list[index]) for index in xrange(len(word_list))) # index -> word
-    print "aggregating idf dict (word -> idf) done"
-
+        # idf_dict
+        print "aggregating df dict (word -> idf) ..."
+        idf_dict = {}
+        
+        progress = ProgressBar(maxval = len(df_dict)).start()
+        counter = 0
+        for word in df_dict:
+            if df_dict[word] > 10:
+                idf_dict[word] = log(float(len(doc_list)) / df_dict[word])               # word -> idf
+            counter += 1
+            progress.update(counter)
+        progress.finish()
+        word_list = list(idf_dict)
+        word_dict = dict((word_list[index], index) for index in xrange(len(word_list)))  # word -> index
+        index_dict = dict((index, word_list[index]) for index in xrange(len(word_list))) # index -> word
+        print "aggregating idf dict (word -> idf) done"
+        
     if dump_idf_file:
         # dump idf dict
         print "dumping idf (word -> idf) ..."
@@ -149,6 +161,10 @@ def main():
                 if (word in word_dict) and (word in idf_dict):
                     feature[word_dict[word]] = tf_dict[word] * idf_dict[word]
 
+            feature_norm = norm(feature)
+            if feature_norm == 0:
+                continue
+            feature = [value / feature_norm for value in feature]
             fd.write("%s\t%s %d\n" % (url, " ".join([str(value) for value in feature]), url_dict[url]))
             counter += 1
             progress.update(counter)
