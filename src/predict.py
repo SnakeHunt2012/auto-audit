@@ -1,11 +1,11 @@
-#!/usr/bin/env python
+#!/da1/huangjingwen/software/anaconda/bin/python
 # -*- coding: utf-8 -*-
 
 from re import compile
-from sys import stdin
+from sys import stdin, path
 from time import time
 from json import loads
-from jieba import cut
+from jieba import cut, enable_parallel
 from codecs import open
 from pickle import load
 from argparse import ArgumentParser
@@ -19,7 +19,6 @@ def duration(timer):
     minute = (timer) % 3600 / 60
     hour = (timer) / 3600
     return "%d:%02d:%02d" % (hour, minute, second)
-                
 
 def main():
 
@@ -32,6 +31,8 @@ def main():
     idf_file = args.idf_file
     tempalte_file = args.template_file
     model_file = args.model_file
+
+    enable_parallel(12)
 
     image_sub = compile("\[img\][^\[\]]+\[/img\]")
     br_sub = compile("\[br\]")
@@ -48,15 +49,20 @@ def main():
     with open(model_file, 'rb') as fd:
         rf = load(fd)
 
-
     timer_one = 0
     timer_two = 0
     timer_three = 0
     timer_four = 0
     timer_five = 0
     timer_total = 0
+    row_index = 0
+    row_list = []
+    column_list = []
+    value_list = []
+    url_list = []
+    
+    total_flag = time()
     for line in stdin:
-        total_flag = time()
         
         splited_line = line.strip().split("\t")
         assert len(splited_line) == 3
@@ -66,54 +72,56 @@ def main():
         content = image_sub.sub("", content)
         content = br_sub.sub("\n", content)
         timer_one += time() - local_flag
-
+        
+        # segment
         local_flag = time()
         seg_list = [seg.encode("utf-8") for seg in cut(content)]
         timer_two += time() - local_flag
-
+        
         local_flag = time()
         tf_dict = {}
         for word in seg_list:
             if word not in tf_dict:
-                tf_dict[word] = 0
-            tf_dict[word] += 1 # word -> word_count
+                tf_dict[word] = 1
+            else:
+                tf_dict[word] += 1 # word -> word_count
         if len(seg_list) > 0:
             for word in tf_dict:
                 tf_dict[word] = float(tf_dict[word]) / len(seg_list) # word -> tf
         timer_three += time() - local_flag
-
+        
         local_flag = time()
-        feature = [0] * len(word_list)
+        feature_dict = {}
         for word in tf_dict:
             if (word in word_dict) and (word in idf_dict):
-                feature[word_dict[word]] = tf_dict[word] * idf_dict[word]
-        feature_norm = norm(feature)
-        if feature_norm > 0:
-            feature = [value / feature_norm for value in feature]
-        column_list = []
-        value_list = []
-        for column_index in xrange(len(feature)):
-            if feature[column_index] != 0:
-                column_list.append(column_index)
-                value_list.append(feature[column_index])
-        row_list = [0] * len(value_list)
-        feature = coo_matrix((value_list, (row_list, column_list)), shape=(1, len(feature)))
+                feature_dict[word_dict[word]] = tf_dict[word] * idf_dict[word]
+        feature_norm = norm([feature_dict[key] for key in feature_dict])
+        for column_index in feature_dict:
+            row_list.append(row_index)
+            column_list.append(column_index)
+            value_list.append(feature_dict[column_index] / feature_norm)
+        url_list.append(url)
+        row_index += 1
         timer_four = time() - local_flag
 
-        local_flag = time()
-        proba_test = rf.predict_proba(feature)
-        timer_five += time() - local_flag
-        print url, proba_test
+    local_flag = time()
+    feature = coo_matrix((value_list, (row_list, column_list)), shape=(len(url_list), len(word_list)))
+    proba_test = rf.predict_proba(feature)
+    timer_five += time() - local_flag
+    assert len(url_list) == proba_test.shape[0]
+    for url, (proba, _) in zip(url_list, proba_test.tolist()):
+        label = 0 if proba > 0.61 else 1
+        print url, proba
+    timer_total += time() - total_flag
         
-        timer_total += time() - total_flag
-    print "%s\tone:%.4f\ttwo:%.4f\tthree:%.4f\tfour:%.4f\tfive:%.5f" % (duration(timer_total),
-                                                                        float(timer_one) / timer_total,
-                                                                        float(timer_two) / timer_total,
-                                                                        float(timer_three) / timer_total,
-                                                                        float(timer_four) / timer_total,
-                                                                        float(timer_five) / timer_total)
- 
+    #print "%s\tone:%.4f\ttwo:%.4f\tthree:%.4f\tfour:%.4f\tfive:%.5f" % (duration(timer_total),
+    #                                                                    float(timer_one) / timer_total,
+    #                                                                    float(timer_two) / timer_total,
+    #                                                                    float(timer_three) / timer_total,
+    #                                                                    float(timer_four) / timer_total,
+    #                                                                    float(timer_five) / timer_total)
 
 if __name__ == "__main__":
 
     main()
+ 
