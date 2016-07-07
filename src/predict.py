@@ -1,4 +1,4 @@
-#!/da1/huangjingwen/software/anaconda/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 from re import compile
