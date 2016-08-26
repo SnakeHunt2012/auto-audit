@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/da1/huangjingwen/software/anaconda/bin/python
 # -*- coding: utf-8 -*-
 
 from re import compile
@@ -20,22 +20,34 @@ def duration(timer):
     hour = (timer) / 3600
     return "%d:%02d:%02d" % (hour, minute, second)
 
+def load_banned_set(banned_file):
+
+    banned_list = []
+    with open(banned_file, 'r') as fd:
+        banned_list = loads(fd.read())
+    banned_set = set(word.encode("utf-8") for word in banned_list)
+    return banned_set
+
 def main():
 
     parser = ArgumentParser()
     parser.add_argument("idf_file", help = "idf_dict file in json format")
     parser.add_argument("template_file", help = "template_dict file in json format")
+    parser.add_argument("banned_file", help = "banned dict file")
     parser.add_argument("model_file", help = "model file in pickle format")
     args = parser.parse_args()
 
     idf_file = args.idf_file
     tempalte_file = args.template_file
+    banned_file = args.banned_file
     model_file = args.model_file
 
-    enable_parallel(12)
+    enable_parallel(6)
 
     image_sub = compile("\[img\][^\[\]]+\[/img\]")
     br_sub = compile("\[br\]")
+
+    banned_set = load_banned_set(banned_file)
 
     with open(idf_file, 'r') as fd:
         idf_dict = loads(fd.read())
@@ -60,12 +72,15 @@ def main():
     column_list = []
     value_list = []
     url_list = []
+    url_banned_dict = {}
     
     total_flag = time()
     for line in stdin:
         
         splited_line = line.strip().split("\t")
-        assert len(splited_line) == 3
+        #assert len(splited_line) == 3
+	if len(splited_line) != 3:
+		continue
         url, title, content = splited_line
 
         local_flag = time()
@@ -77,6 +92,13 @@ def main():
         local_flag = time()
         seg_list = [seg.encode("utf-8") for seg in cut(content)]
         timer_two += time() - local_flag
+
+        # banned check
+        banned_count = 0
+        for word in seg_list:
+            if word in banned_set:
+                banned_count += 1
+        url_banned_dict[url] = banned_count
         
         local_flag = time()
         tf_dict = {}
@@ -106,12 +128,18 @@ def main():
 
     local_flag = time()
     feature = coo_matrix((value_list, (row_list, column_list)), shape=(len(url_list), len(word_list)))
-    proba_test = rf.predict_proba(feature)
+    try:
+        proba_test = rf.predict_proba(feature)
+    except ValueError:
+	return
     timer_five += time() - local_flag
     assert len(url_list) == proba_test.shape[0]
     for url, (proba, _) in zip(url_list, proba_test.tolist()):
-        label = 0 if proba > 0.61 else 1
-        print url, proba
+        banned_count = 0
+        if url in url_banned_dict:
+            banned_count = url_banned_dict[url]
+        label = 0 if (proba > 0.60 and banned_count < 5) else 1
+        print "%s\t%d" % (url, label)
     timer_total += time() - total_flag
         
     #print "%s\tone:%.4f\ttwo:%.4f\tthree:%.4f\tfour:%.4f\tfive:%.5f" % (duration(timer_total),
