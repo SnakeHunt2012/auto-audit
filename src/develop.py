@@ -34,7 +34,6 @@ def sparse_matrix(url_list, feature_list, label_list, dim, index_list):
 #def load_data(path, netloc_dict):
 def load_data(path):
     
-    dim = 0
     good_label = 0
     bad_label = 1
     
@@ -44,35 +43,20 @@ def load_data(path):
     
     good_count = 0
     bad_count = 0
-    
-    with open(path, 'r') as fd:
-        for line in fd:
-            splited_line = line.strip().split("\t")
-            if len(splited_line) != 2:
-                continue
-            url, feature_str = splited_line
-            #netloc = urlparse(url).netloc
-            value_list = feature_str.strip().split()
-            assert len(value_list) > 0
-            label = int(value_list.pop(-1))
-            assert len(value_list) > 0
-            assert label in set([good_label, bad_label])
 
-            #if netloc in netloc_dict:
-            #    value_list += [float(val) for val in netloc_dict[netloc]]
-            #else:
-            #    value_list += [float(val) for val in netloc_dict["unknown"]]
-            if dim == 0:
-                dim = len(value_list)
-            assert len(value_list) == dim
-            feature = [(index, float(value_list[index])) for index in xrange(dim) if (value_list[index] != '0.0' and value_list[index] != '0')]
-            if label == good_label:
-                good_count +=1
-            if label == bad_label:
-                bad_count += 1
-            url_list.append(url)
-            feature_list.append(feature)
-            label_list.append(label)
+    with open(path, 'r') as fd:
+        data_dict = loads(fd.read())
+        url_list = data_dict["url_list"]
+        feature_list = data_dict["feature_list"]
+        label_list = data_dict["label_list"]
+        feature_dim = data_dict["feature_dim"]
+    
+    for label in label_list:
+        if label == good_label:
+            good_count += 1
+        if label == bad_label:
+            bad_count += 1
+    
     print len(url_list) , len(feature_list) , len(label_list) , (good_count + bad_count)
     assert len(url_list) == len(feature_list) == len(label_list) == (good_count + bad_count)
     
@@ -94,8 +78,8 @@ def load_data(path):
     train_index_list = index_list[:threshold]
     validate_index_list = index_list[threshold:]
 
-    url_train, X_train, y_train = sparse_matrix(url_list, feature_list, label_list, dim, train_index_list)
-    url_validate, X_validate, y_validate = sparse_matrix(url_list, feature_list, label_list, dim, validate_index_list)
+    url_train, X_train, y_train = sparse_matrix(url_list, feature_list, label_list, feature_dim, train_index_list)
+    url_validate, X_validate, y_validate = sparse_matrix(url_list, feature_list, label_list, feature_dim, validate_index_list)
 
     return url_train, X_train, y_train, url_validate, X_validate, y_validate
     
