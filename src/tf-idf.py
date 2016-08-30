@@ -2,10 +2,10 @@
 # -*- coding: utf-8
 
 from re import compile
-from json import loads, dumps
+from json import loads, dumps, dump
+from math import sqrt
 from codecs import open
 from numpy import log
-from numpy.linalg import norm
 from jieba import cut
 from urlparse import urlparse
 from argparse import ArgumentParser
@@ -145,6 +145,10 @@ def main():
     # tfidf
     print "dumping feature ..."
     with open(data_file, 'w') as fd:
+        url_list = []
+        feature_list = []
+        label_list = []
+        
         progress = ProgressBar(maxval = len(doc_list)).start()
         counter = 0
         for url, seg_list in doc_list:
@@ -156,19 +160,23 @@ def main():
             for word in tf_dict:
                 tf_dict[word] = float(tf_dict[word]) / len(seg_list)
                 
-            feature = [0] * len(word_list)
+            feature_dict = {}
             for word in tf_dict:
                 if (word in word_dict) and (word in idf_dict):
-                    feature[word_dict[word]] = tf_dict[word] * idf_dict[word]
+                    feature_dict[word_dict[word]] = tf_dict[word] * idf_dict[word]
+            norm = sqrt(sum([value * value for value in feature_dict.itervalues()]))
+            index_value_list = [(index, float(value) / norm) for index, value in feature_dict.iteritems()]
 
-            feature_norm = norm(feature)
-            if feature_norm == 0:
-                continue
-            feature = [value / feature_norm for value in feature]
-            fd.write("%s\t%s %d\n" % (url, " ".join([str(value) for value in feature]), url_dict[url]))
+            url_list.append(url)
+            feature_list.append(index_value_list)
+            label_list.append(url_dict[url])
+            
             counter += 1
             progress.update(counter)
         progress.finish()
+        
+        assert len(url_list) == len(feature_list) == len(label_list)
+        dump({"url_list": url_list, "feature_list": feature_list, "label_list": label_list}, fd)
     print "dumping feature done"
     
 if __name__ == "__main__":
