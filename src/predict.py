@@ -20,26 +20,34 @@ def duration(timer):
     hour = (timer) / 3600
     return "%d:%02d:%02d" % (hour, minute, second)
 
-def load_banned_set(banned_file):
+def load_banned_dict(banned_file):
 
-    banned_list = []
+    banned_dict = {}
     with open(banned_file, 'r') as fd:
-        banned_list = loads(fd.read())
-    banned_set = set(word.encode("utf-8") for word in banned_list)
-    return banned_set
+        banned_dict = loads(fd.read())
+    return banned_dict
 
+def load_political_dict(political_file):
+
+    political_dict = {}
+    with open(political_file, 'r') as fd:
+        political_dict = loads(fd.read())
+    return political_dict
+    
 def main():
 
     parser = ArgumentParser()
     parser.add_argument("idf_file", help = "idf_dict file in json format")
     parser.add_argument("template_file", help = "template_dict file in json format")
     parser.add_argument("banned_file", help = "banned dict file")
+    parser.add_argument("political_file", help = "political dict file in json format")
     parser.add_argument("model_file", help = "model file in pickle format")
     args = parser.parse_args()
 
     idf_file = args.idf_file
     tempalte_file = args.template_file
     banned_file = args.banned_file
+    political_file = args.political_file
     model_file = args.model_file
 
     enable_parallel(6)
@@ -47,8 +55,12 @@ def main():
     image_sub = compile("\[img\][^\[\]]+\[/img\]")
     br_sub = compile("\[br\]")
 
-    banned_set = load_banned_set(banned_file)
-
+    banned_dict = load_banned_dict(banned_file)
+    
+    political_dict = load_political_dict(political_file)
+    political_name_set = set(name.encode("utf-8") for name in political_dict["name_list"])
+    political_verb_set = set(verb.encode("utf-8") for verb in political_dict["verb_list"])
+    
     with open(idf_file, 'r') as fd:
         idf_dict = loads(fd.read())
         idf_dict = dict((key.encode("utf-8"), idf_dict[key]) for key in idf_dict) # word -> idf
@@ -94,11 +106,23 @@ def main():
         timer_two += time() - local_flag
 
         # banned check
-        banned_count = 0
+        banned_score = 0
         for word in seg_list:
-            if word in banned_set:
-                banned_count += 1
-        url_banned_dict[url] = banned_count
+            if word.decode("utf-8") in banned_dict:
+                banned_score += banned_dict[word.decode("utf-8")]
+        url_banned_dict[url] = banned_score
+
+        # political check
+        political_name_flag = False
+        political_verb_flag = False
+        for word in seg_list:
+            if word in political_name_set:
+                political_name_flag = True
+                break
+        for word in seg_list:
+            if word in political_verb_set:
+                political_verb_flag = True
+                break
         
         local_flag = time()
         tf_dict = {}
@@ -135,19 +159,13 @@ def main():
     timer_five += time() - local_flag
     assert len(url_list) == proba_test.shape[0]
     for url, (proba, _) in zip(url_list, proba_test.tolist()):
-        banned_count = 0
+        banned_score = 0
         if url in url_banned_dict:
-            banned_count = url_banned_dict[url]
-        label = 0 if (proba > 0.60 and banned_count < 5) else 1
+            banned_score = url_banned_dict[url]
+        label = 0 if (proba > 0.59 and banned_score <= 10 and not (political_name_flag and political_verb_flag)) else 1
         print "%s\t%d" % (url, label)
     timer_total += time() - total_flag
         
-    #print "%s\tone:%.4f\ttwo:%.4f\tthree:%.4f\tfour:%.4f\tfive:%.5f" % (duration(timer_total),
-    #                                                                    float(timer_one) / timer_total,
-    #                                                                    float(timer_two) / timer_total,
-    #                                                                    float(timer_three) / timer_total,
-    #                                                                    float(timer_four) / timer_total,
-    #                                                                    float(timer_five) / timer_total)
 
 if __name__ == "__main__":
 
