@@ -87,6 +87,10 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         for word in seg_list:
             if word.decode("utf-8") in banned_dict:
                 banned_score += banned_dict[word.decode("utf-8")]
+        if banned_score >= 10:
+            res_str = dumps({"proba": None, "banned_score": banned_score, "political_name_flag": None, "political_verb_flag": None})
+            self.finish_response(res_str)
+            return
 
         # political check
         political_name_flag = False
@@ -99,6 +103,18 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             if word in political_verb_set:
                 political_verb_flag = True
                 break
+        if political_name_flag and political_verb_flag:
+            res_str = dumps({"proba": None, "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag})
+            self.finish_response(res_str)
+            return
+
+        # white list url check
+        for white_url in white_url_list:
+            if white_url in url:
+                res_str = dumps({"proba": 1.0, "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag})
+                self.finish_response(res_str)
+                return
+            
         tf_dict = {}
         for word in seg_list:
             if word not in tf_dict:
@@ -132,7 +148,10 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         res_dict = {"proba": proba_test[0][0], "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag}
         res_str = dumps(res_dict)
 
-        # end
+        self.finish_response(res_str)
+
+    def finish_response(self, res_str):
+        
         self.send_response(200)
         self.send_header("Content-type", "text/html;charset=utf-8")
         self.send_header("Content-Length", str(len(res_str)))
