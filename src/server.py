@@ -64,6 +64,15 @@ def load_political_dict(political_file):
     with open(political_file, 'r') as fd:
         political_dict = loads(fd.read())
     return political_dict
+
+def load_sex_set(sex_file):
+    sex_set = set([])
+    with open(sex_file, 'r') as fd:
+        for line in fd:
+            if len(line.strip()) == 0:
+                continue
+            sex_set.add(line.strip())
+    return sex_set
     
 class HTTPRequestHandler(BaseHTTPRequestHandler):
 
@@ -80,38 +89,53 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         if "url" in query_dict:
             url = parse_qs(unquote(self.path))["url"][0]
 
-        seg_list = [seg.encode("utf-8") for seg in cut(title + " " + content)]
+        title_seg_list = [seg.encode("utf-8") for seg in cut(title)]
+        content_seg_list = [seg.encode("utf-8") for seg in cut(content)]
+        seg_list = title_seg_list + content_seg_list
+
+        # sex check
+        for word in seg_list:
+            if word in sex_set:
+                res_str = dumps({"flag": 1, "proba": None, "banned_score": None, "political_name_flag": None, "political_verb_flag": None, "sex_word": word})
+                self.finish_response(res_str)
+                return
         
         # banned check
         banned_score = 0
+        reason_list = []
         for word in seg_list:
             if word.decode("utf-8") in banned_dict:
                 banned_score += banned_dict[word.decode("utf-8")]
-        if banned_score >= 10:
-            res_str = dumps({"proba": None, "banned_score": banned_score, "political_name_flag": None, "political_verb_flag": None})
+                reason_list.append(word)
+        if banned_score >= 15:
+            res_str = dumps({"flag": 1, "proba": None, "banned_score": banned_score, "political_name_flag": None, "political_verb_flag": None, "reason_list": reason_list})
             self.finish_response(res_str)
             return
 
         # political check
         political_name_flag = False
         political_verb_flag = False
-        for word in seg_list:
+        political_name = None
+        political_verb = None
+        for word in title_seg_list:
             if word in political_name_set:
                 political_name_flag = True
+                political_name = word
                 break
-        for word in seg_list:
+        for word in title_seg_list:
             if word in political_verb_set:
                 political_verb_flag = True
+                political_verb = word
                 break
         if political_name_flag and political_verb_flag:
-            res_str = dumps({"proba": None, "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag})
+            res_str = dumps({"flag": 1, "proba": None, "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag, "political_name": political_name, "political_verb": political_verb})
             self.finish_response(res_str)
             return
 
         # white list url check
         for white_url in white_url_list:
             if white_url in url:
-                res_str = dumps({"proba": 1.0, "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag})
+                res_str = dumps({"flag": 0, "proba": None, "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag})
                 self.finish_response(res_str)
                 return
             
@@ -145,7 +169,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         except ValueError, error:
             raise error
         
-        res_dict = {"proba": proba_test[0][0], "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag}
+        res_dict = {"flag": 0 if proba_test[0][0] > 0.20 else 1, "proba": proba_test[0][0], "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag}
         res_str = dumps(res_dict)
 
         self.finish_response(res_str)
@@ -164,12 +188,14 @@ br_sub = compile("\[br\]")
 
 idf_file = "./download/idf-new.json"
 tempalte_file = "./download/template-new.json"
+sex_file = "./download/sex.tsv"
 banned_file = "./download/banned-dict.json"
 political_file = "./download/political-dict.json"
 model_file = "./download/model-new.pickle"
 
 enable_parallel(6)
 
+sex_set = load_sex_set(sex_file)
 banned_dict = load_banned_dict(banned_file)
 
 political_dict = load_political_dict(political_file)
