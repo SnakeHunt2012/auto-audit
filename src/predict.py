@@ -13,6 +13,33 @@ from numpy import array
 from numpy.linalg import norm
 from scipy.sparse import coo_matrix
 
+white_url_list = [
+        "www.people.com.cn",
+        "www.xinhuanet.com",
+        "www.news.cn",
+        "www.xinhua.org",
+        "www.china.com.cn",
+        "www.china.org.cn",
+        "www.cri.cn",
+        "www.chinadaily.com.cn",
+        "www.cntv.cn",
+        "www.cctv.com",
+        "www.cctv.com.cn",
+        "www.cntv.com.cn",
+        "www.cctv.cn",
+        "www.youth.cn",
+        "www.cycnet.com",
+        "www.cycnet.com",
+        "www.taiwan.cn",
+        "www.chinataiwan.org",
+        "www.tibet.cn",
+        "www.cnr.cn",
+        "www.chinanews.com",
+        "www.chinanews.com.cn",
+        "www.cyol.net",
+        "www.cyol.com"
+]
+
 def duration(timer):
 
     second = (timer) % 60
