@@ -14,6 +14,7 @@ from argparse import ArgumentParser
 from numpy import array
 from numpy.linalg import norm
 from scipy.sparse import coo_matrix
+from multiprocessing import Process
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 
 
@@ -139,37 +140,40 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                 self.finish_response(res_str)
                 return
             
-        tf_dict = {}
-        for word in seg_list:
-            if word not in tf_dict:
-                tf_dict[word] = 1
-            else:
-                tf_dict[word] += 1 # word -> word_count
-        if len(seg_list) > 0:
-            for word in tf_dict:
-                tf_dict[word] = float(tf_dict[word]) / len(seg_list) # word -> tf
-        
-        feature_dict = {}
-        for word in tf_dict:
-            if (word in word_dict) and (word in idf_dict):
-                feature_dict[word_dict[word]] = tf_dict[word] * idf_dict[word]
-        feature_norm = norm([feature_dict[key] for key in feature_dict])
-        
-        row_list = []
-        column_list = []
-        value_list = []
-        for column_index in feature_dict:
-            row_list.append(0)
-            column_list.append(column_index)
-            value_list.append(feature_dict[column_index] / feature_norm)
-        
-        feature = coo_matrix((value_list, (row_list, column_list)), shape=(1, len(word_list)))
-        try:
-            proba_test = rf.predict_proba(feature)
-        except ValueError, error:
-            raise error
-        
-        res_dict = {"flag": 0 if proba_test[0][0] > 0.20 else 1, "proba": proba_test[0][0], "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag}
+        #tf_dict = {}
+        #for word in seg_list:
+        #    if word not in tf_dict:
+        #        tf_dict[word] = 1
+        #    else:
+        #        tf_dict[word] += 1 # word -> word_count
+        #if len(seg_list) > 0:
+        #    for word in tf_dict:
+        #        tf_dict[word] = float(tf_dict[word]) / len(seg_list) # word -> tf
+        #
+        #feature_dict = {}
+        #for word in tf_dict:
+        #    if (word in word_dict) and (word in idf_dict):
+        #        feature_dict[word_dict[word]] = tf_dict[word] * idf_dict[word]
+        #feature_norm = norm([feature_dict[key] for key in feature_dict])
+        #
+        #row_list = []
+        #column_list = []
+        #value_list = []
+        #for column_index in feature_dict:
+        #    row_list.append(0)
+        #    column_list.append(column_index)
+        #    value_list.append(feature_dict[column_index] / feature_norm)
+        #
+        #feature = coo_matrix((value_list, (row_list, column_list)), shape=(1, len(word_list)))
+        #try:
+        #    proba_test = rf.predict_proba(feature)
+        #except ValueError, error:
+        #    raise error
+        #
+        #res_dict = {"flag": 0 if proba_test[0][0] > 0.20 else 1, "proba": proba_test[0][0], "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag}
+        #res_str = dumps(res_dict)
+
+        res_dict = {"flag": 0, "banned_score": banned_score, "political_name_flag": political_name_flag, "political_verb_flag": political_verb_flag}
         res_str = dumps(res_dict)
 
         self.finish_response(res_str)
@@ -214,7 +218,27 @@ word_list = [index_dict[index] for index in xrange(len(word_dict))] # [word ...]
 with open(model_file, 'rb') as fd:
     rf = load(fd)
 
-server_address = ("", 4321)
-http_deamon = HTTPServer(server_address, HTTPRequestHandler)
-http_deamon.serve_forever()
+#parser = ArgumentParser()
+#parser.add_argument("port", help = "port")
+#args = parser.parse_args()
+#port = args.port
 
+def run_server(port):
+
+    server_address = ("", int(port))
+    http_deamon = HTTPServer(server_address, HTTPRequestHandler)
+    http_deamon.serve_forever()
+    
+
+port_list = [4440, 4441, 4442, 4443, 4444, 4445, 4446, 4447, 4448, 4449]
+
+process_list = []
+for port in port_list:
+    process = Process(target = run_server, args = (port, ))
+    process_list.append((port, process))
+for port, process in process_list:
+    process.start()
+    print "process start at", port
+for port, process in process_list:
+    print "process join at", port
+    process.join()
