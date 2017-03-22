@@ -260,7 +260,7 @@ bool political_check(const set<string> &political_name_set, const set<string> &p
         set<string>::const_iterator political_iter = political_name_set.find(*seg_iter);
         if (political_iter != political_name_set.end()) {
             political_name_flag = true;
-            oss << "political name: " << *political_iter << ", ";
+            oss << "political name: " << *political_iter;
             break;
         }
     }
@@ -268,11 +268,15 @@ bool political_check(const set<string> &political_name_set, const set<string> &p
         set<string>::const_iterator political_iter = political_verb_set.find(*seg_iter);
         if (political_iter != political_verb_set.end()) {
             political_verb_flag = true;
-            oss << "political verb: " << *political_iter;
+            oss << ", " << "political verb: " << *political_iter;
             break;
         }
     }
-    if (political_name_flag && political_verb_flag) {
+    //if (political_name_flag && political_verb_flag) {
+    //    message = oss.str();
+    //    return true;
+    //}
+    if (political_name_flag) {
         message = oss.str();
         return true;
     }
