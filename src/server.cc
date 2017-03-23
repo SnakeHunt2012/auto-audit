@@ -39,14 +39,14 @@ int main()
     qss::segmenter::Segmenter *segmenter;
 
     const char *log_file = "server-error.log";
-    const char *template_file = "/home/huangjingwen/work/auto-audit/src/dict/template-dict.json";
-    const char *model_file = "/home/huangjingwen/work/auto-audit/src/model";
+    const char *template_file = "./dict/template-dict.json";
+    const char *model_file = "./model";
     const char *segment_config_file = "/home/huangjingwen/work/auto-audit/qmodule/segment-2.2.1/conf/qsegconf.ini";
-    const char *white_url_file = "/home/huangjingwen/work/auto-audit/src/download/white-url-dict.tsv";
-    const char *pornographic_file = "/home/huangjingwen/work/auto-audit/src/download/pornographic-dict.tsv";
-    const char *sensitive_file = "/home/huangjingwen/work/auto-audit/src/download/sensitive-dict.tsv";
-    const char *political_name_file = "/home/huangjingwen/work/auto-audit/src/download/political-name-dict.tsv";
-    const char *political_verb_file = "/home/huangjingwen/work/auto-audit/src/download/political-verb-dict.tsv";
+    const char *white_url_file = "./download/white-url-dict.tsv";
+    const char *pornographic_file = "./download/pornographic-dict.tsv";
+    const char *sensitive_file = "./download/sensitive-dict.tsv";
+    const char *political_name_file = "./download/political-name-dict.tsv";
+    const char *political_verb_file = "./download/political-verb-dict.tsv";
 
     ofstream info_log(log_file);
     Classifier classifier(template_file, model_file);
